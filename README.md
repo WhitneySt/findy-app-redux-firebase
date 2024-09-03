@@ -13,7 +13,10 @@
 ```bash
   npm create vite@latest my-findy-app -- --template react
 ```
-- abrimos la carpeta del proyecto en VSC e instalamos dependencias con: npm install
+- abrimos la carpeta del proyecto en VSCode e instalamos dependencias con:
+  ```bash
+  npm install
+  ```
 - Instalar librerías:
 	- Redux toolkit
 	- react-redux
