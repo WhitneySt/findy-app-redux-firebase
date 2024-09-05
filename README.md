@@ -300,8 +300,8 @@ npm install formik yup --save
 	- Las funcionalidades que debe tener cada elemento que conforman el componente.
 - Para manejar el archivo que se recibe en el input tipo `file` del formulario, se debe subir esa foto de perfil en el servidor de cloudinary
   
-	CONFIGURACION DE CLAOUDINARY
-	-Ir a la página de cloudinary: [https://cloudinary.com/](https://cloudinary.com/)
+	CONFIGURACION DE CLOUDINARY
+	- Ir a la página de cloudinary: [https://cloudinary.com/](https://cloudinary.com/)
 	- Iniciamos sesión
 	- ir al dashboard
 	- asegurar el cloud name (copiarlo)
