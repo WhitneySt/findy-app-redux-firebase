@@ -114,7 +114,7 @@
 ```
 
 - Configurar el store con el método `configureStore` de redux toolkit:
-```
+```javascript
 import { configureStore } from "@reduxjs/toolkit";
 
 
@@ -128,7 +128,7 @@ export default store;
 ```
 - En `authSlice.js`, creamos los thunks con `createAsyncThunk` y el slice
 
-```
+```javascript
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth } from "../../Firebase/firebaseConfig";
@@ -179,7 +179,7 @@ const authReducer = authSlice.reducer;
 export default authReducer;
 ```
 - Incluimos el slice en los reducers del store
-```
+```javascript
 import { configureStore } from "@reduxjs/toolkit";
 import authReducer from "./auth/authSlice";
 
@@ -194,7 +194,7 @@ export default store;
 ```
 
 - Integrar redux en la aplicación en `main.jsx`
-```
+```javascript
 import { createRoot } from "react-dom/client";
 import AppRouter from "./router/AppRouter";
 import { Provider } from "react-redux";
@@ -245,7 +245,7 @@ createRoot(document.getElementById("root")).render(
 ```
 
 2. En el componente Layout.jsx
-```
+```javascript
 import { Outlet } from "react-router-dom"
 
 
@@ -260,7 +260,7 @@ const Layout = () => {
 export default Layout
 ```
  3. Definir las rutas en el componente `<AppRouter/>`
-```
+```javascript
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Layout from "../components/Layout/Layout";
@@ -349,7 +349,7 @@ npm install formik yup --save
 
 - En `uploadFiles.js` colocar el siguiente código:
 
-```
+```javascript
 const uploadFiles = async (file) => {
   const cloudName = "";		//Colocar el cloudName de su cuenta
   const uploadPreset = "";	//Colocar el preset que se creó en cloudinary para el proyecto
@@ -394,7 +394,7 @@ npm install sweetalert2
 
 - Para mostrar los errores desde `Register.jsx`
 	- Crear una acción en el slice `authSlice` para limpiar los errores en `authSlice.js`
-```
+```javascript
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth } from "../../Firebase/firebaseConfig";
@@ -461,7 +461,7 @@ export const { clearError } = authSlice.actions;
 ```
 	- Validamos si existe un error desde componente `Register.jsx`
 	
-```
+```javascript
 import { ErrorMessage, Field, Form, Formik } from "formik";
 import { Link, useNavigate } from "react-router-dom";
 import * as Yup from "yup";
