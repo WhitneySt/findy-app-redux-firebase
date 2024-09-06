@@ -1,12 +1,23 @@
-import { Outlet } from "react-router-dom"
-
+import { useDispatch, useSelector } from "react-redux";
+import { Outlet, useNavigate } from "react-router-dom";
+import { logoutThunk } from "../../redux/auth/authSlice";
 
 const Layout = () => {
-  return (
-      <div>Layout
-          <Outlet/>
-    </div>
-  )
-}
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const { isAuthenticated } = useSelector((store) => store.auth);
 
-export default Layout
+  const handleLogout = () => dispatch(logoutThunk());
+  const handleBackNavigation = () => navigate(-1);
+
+  return (
+    <div>
+      <button onClick={handleBackNavigation}>Ir atrás</button>
+      {isAuthenticated && <button onClick={handleLogout}>Cerrar sesión</button>}
+      Layout
+      <Outlet />
+    </div>
+  );
+};
+
+export default Layout;
