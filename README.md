@@ -459,7 +459,7 @@ export default authReducer;
 export const { clearError } = authSlice.actions;
 
 ```
-	- Validamos si existe un error desde componente `Register.jsx`
+- Validamos si existe un error desde componente `Register.jsx`
 	
 ```javascript
 import { ErrorMessage, Field, Form, Formik } from "formik";
@@ -611,3 +611,1330 @@ const Register = () => {
 export default Register;
 
 ```
+# CLASE VIERNES SEPT 06/2024
+## Inicio de sesión con email/contraseña
+ 1. Crear el Thunk: Permitirá iniciar la sesión desde Firebase y alimentar el store
+
+```javascript
+export const loginWithEmailAndPassworThunk = createAsyncThunk(
+  "auth/login",
+  async ({ email, password }) => {
+    const { user } = await signInWithEmailAndPassword(auth, email, password);
+    return {
+      id: user.uid,
+      displayName: user.displayName,
+      email: email,
+      accessToken: user.accessToken,
+      photoURL: user.photoURL,
+    };
+  }
+);
+```
+ 2. Incluir los `extraReducers` en el `authSlice`
+
+```javascript
+import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
+} from "firebase/auth";
+import { auth } from "../../Firebase/firebaseConfig";
+
+export const createAccountThunk = createAsyncThunk(
+  "auth/createAccount",
+  async ({ email, password, name, photo }) => {
+    const userCredentials = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+    await updateProfile(auth.currentUser, {
+      displayName: name,
+      photoURL: photo,
+    });
+    return {
+      id: userCredentials.user.uid,
+      displayName: name,
+      email: email,
+      accessToken: userCredentials.user.accessToken,
+      photoURL: photo,
+    };
+  }
+);
+
+export const loginWithEmailAndPassworThunk = createAsyncThunk(
+  "auth/login",
+  async ({ email, password }) => {
+    const { user } = await signInWithEmailAndPassword(auth, email, password);
+    return {
+      id: user.uid,
+      displayName: user.displayName,
+      email: email,
+      accessToken: user.accessToken,
+      photoURL: user.photoURL,
+    };
+  }
+);
+
+const authSlice = createSlice({
+  name: "auth",
+  initialState: {
+    isAuthenticated: false,
+    user: null,
+    loading: false,
+    error: null,
+  },
+  reducers: {
+    clearError: (state) => {
+      state.error = null;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(createAccountThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(createAccountThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.isAuthenticated = true;
+        state.user = action.payload;
+        state.error = null;
+      })
+      .addCase(createAccountThunk.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message;
+      }).addCase(loginWithEmailAndPassworThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      }).addCase(loginWithEmailAndPassworThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.isAuthenticated = true;
+        state.user = action.payload;
+        state.error = null;
+      }).addCase(loginWithEmailAndPassworThunk.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message;
+      })
+  },
+});
+
+const authReducer = authSlice.reducer;
+export default authReducer;
+
+export const { clearError } = authSlice.actions;
+```
+ 3. Construir el componente Login, en este componente nos vamos a disparar el thunk y accederemos a la información que se encuentra en el store.
+
+```javascript
+import { ErrorMessage, Field, Form, Formik } from "formik";
+import { useDispatch, useSelector } from "react-redux";
+import { Link, useNavigate } from "react-router-dom";
+import * as Yup from "yup";
+import {
+  clearError,
+  loginWithEmailAndPassworThunk,
+} from "../../redux/auth/authSlice";
+import Swal from "sweetalert2";
+
+const validationSchema = Yup.object().shape({
+  email: Yup.string()
+    .email("Ingrese un correo electrónico válido")
+    .required("El correo electrónico es obligatorio"),
+  password: Yup.string().required("La contraseña es obligatoria"),
+});
+
+const Login = () => {
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const { error, isAuthenticated, user } = useSelector((store) => store.auth);
+
+  if (error) {
+    Swal.fire({
+      title: "Oops!",
+      text: "¡Ha ocurrido un error en el inicio de sesión! Verifique sus credenciales",
+      icon: "error",
+    }).then(() => dispatch(clearError()));
+  }
+
+  if (isAuthenticated) {
+    Swal.fire({
+      title: "¡Has iniciado sesión exitosamente!",
+      text: `¡Te damos la bienvenida, ${user?.displayName}!`,
+      icon: "success",
+    }).then(() => navigate("/"));
+  }
+
+  return (
+    <main>
+      <h1>Iniciar Sesión</h1>
+      <Formik
+        initialValues={{
+          email: "",
+          password: "",
+        }}
+        validationSchema={validationSchema}
+        onSubmit={(values, { setSubmitting }) => {
+          dispatch(loginWithEmailAndPassworThunk(values));
+          setSubmitting(false);
+        }}
+      >
+        {({ isSubmitting }) => (
+          <Form>
+            <label htmlFor="email">Correo electrónico:</label>
+            <Field
+              type="email"
+              name="email"
+              id="email"
+              placeholder="ejemplo@email.com"
+            />
+            <ErrorMessage name="email" />
+
+            <label htmlFor="password">Contraseña:</label>
+            <Field
+              type="password"
+              name="password"
+              id="password"
+              placeholder="Ingrese su contraseña"
+            />
+            <ErrorMessage name="password" />
+
+            <button type="submit" disabled={isSubmitting}>
+              Iniciar sesión
+            </button>
+          </Form>
+        )}
+      </Formik>
+      <p>
+        Si aún no tiene una cuenta, por favor dar click{" "}
+        <Link to={"/register"}>aquí!</Link>
+      </p>
+      <section>
+        <span>o, también puedes iniciar sesión con:</span>
+        <div>
+          <button>Iniciar sesión con google</button>
+          <button>Iniciar sesión con teléfono</button>
+        </div>
+      </section>
+    </main>
+  );
+};
+
+export default Login;
+```
+## Cierre de sesión
+1. Creamos en `authSlice.js` el thunk `logoutThunk`
+2. Agregamos los casos en la propiedad `extraReducers` del objeto que recibe el slice para cuando la operación se ejecute con éxito o sea rechazada.
+
+```javascript
+import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+} from "firebase/auth";
+import { auth } from "../../Firebase/firebaseConfig";
+
+export const createAccountThunk = createAsyncThunk(
+  "auth/createAccount",
+  async ({ email, password, name, photo }) => {
+    const userCredentials = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+    await updateProfile(auth.currentUser, {
+      displayName: name,
+      photoURL: photo,
+    });
+    return {
+      id: userCredentials.user.uid,
+      displayName: name,
+      email: email,
+      accessToken: userCredentials.user.accessToken,
+      photoURL: photo,
+    };
+  }
+);
+
+export const loginWithEmailAndPassworThunk = createAsyncThunk(
+  "auth/login",
+  async ({ email, password }) => {
+    const { user } = await signInWithEmailAndPassword(auth, email, password);
+    return {
+      id: user.uid,
+      displayName: user.displayName,
+      email: email,
+      accessToken: user.accessToken,
+      photoURL: user.photoURL,
+    };
+  }
+);
+
+export const logoutThunk = createAsyncThunk("auth/logout", async () => {
+  await signOut(auth);
+  return null;
+});
+
+const authSlice = createSlice({
+  name: "auth",
+  initialState: {
+    isAuthenticated: false,
+    user: null,
+    loading: false,
+    error: null,
+  },
+  reducers: {
+    clearError: (state) => {
+      state.error = null;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(createAccountThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(createAccountThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.isAuthenticated = true;
+        state.user = action.payload;
+        state.error = null;
+      })
+      .addCase(createAccountThunk.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message;
+      })
+      .addCase(loginWithEmailAndPassworThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(loginWithEmailAndPassworThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.isAuthenticated = true;
+        state.user = action.payload;
+        state.error = null;
+      })
+      .addCase(loginWithEmailAndPassworThunk.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message;
+      })
+      .addCase(logoutThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.isAuthenticated = false;
+        state.user = action.payload;
+        state.error = null;
+      })
+      .addCase(logoutThunk.rejected, (state, action) => {
+        (state.loading = false), (state.error = action.error.message);
+      });
+  },
+});
+
+const authReducer = authSlice.reducer;
+export default authReducer;
+
+export const { clearError } = authSlice.actions;
+
+```
+
+2. En el componente `Layout.jsx`, agregamos un botón de cierre de sesión.
+3. En el onClick del botón disparamos el thunk
+
+```javascript
+import { useDispatch, useSelector } from "react-redux";
+import { Outlet } from "react-router-dom";
+import { logoutThunk } from "../../redux/auth/authSlice";
+
+const Layout = () => {
+  const dispatch = useDispatch();
+  const {isAuthenticated} = useSelector(store=>store.auth)
+
+  const handleLogout = () => dispatch(logoutThunk());
+
+  return (
+    <div>
+      {isAuthenticated && <button onClick={handleLogout}>Cerrar sesión</button>}
+      Layout
+      <Outlet />
+    </div>
+  );
+};
+
+export default Layout;
+
+```
+## Inicio de sesión con Google
+1. Activar el proveedor de acceso desde la consola de firebase.
+2. Crear el thunk que permitirá el inicio de sesión con google a través de firebase auth y posteriormente actualizar el store.
+3. Agregar los casos en la propiedad `extraReducers` para los estados: `pending`, `fulfilled`, `rejected`
+```javascript
+import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import {
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  updateProfile,
+} from "firebase/auth";
+import { auth } from "../../Firebase/firebaseConfig";
+
+export const createAccountThunk = createAsyncThunk(
+  "auth/createAccount",
+  async ({ email, password, name, photo }) => {
+    const userCredentials = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+    await updateProfile(auth.currentUser, {
+      displayName: name,
+      photoURL: photo,
+    });
+    return {
+      id: userCredentials.user.uid,
+      displayName: name,
+      email: email,
+      accessToken: userCredentials.user.accessToken,
+      photoURL: photo,
+    };
+  }
+);
+
+export const loginWithEmailAndPassworThunk = createAsyncThunk(
+  "auth/login",
+  async ({ email, password }) => {
+    const { user } = await signInWithEmailAndPassword(auth, email, password);
+    return {
+      id: user.uid,
+      displayName: user.displayName,
+      email: email,
+      accessToken: user.accessToken,
+      photoURL: user.photoURL,
+    };
+  }
+);
+
+export const logoutThunk = createAsyncThunk("auth/logout", async () => {
+  await signOut(auth);
+  return null;
+});
+
+export const googleLoginThunk = createAsyncThunk(
+  "auth/googleLogin",
+  async () => {
+    const googleProvider = new GoogleAuthProvider();
+    const { user } = await signInWithPopup(auth, googleProvider);
+    return {
+      id: user.uid,
+      displayName: user.displayName,
+      accessToken: user.accessToken,
+      photoURL: user.photoURL,
+      email: user.email,
+    };
+  }
+);
+
+const authSlice = createSlice({
+  name: "auth",
+  initialState: {
+    isAuthenticated: false,
+    user: null,
+    loading: false,
+    error: null,
+  },
+  reducers: {
+    clearError: (state) => {
+      state.error = null;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(createAccountThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(createAccountThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.isAuthenticated = true;
+        state.user = action.payload;
+        state.error = null;
+      })
+      .addCase(createAccountThunk.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message;
+      })
+      .addCase(loginWithEmailAndPassworThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(loginWithEmailAndPassworThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.isAuthenticated = true;
+        state.user = action.payload;
+        state.error = null;
+      })
+      .addCase(loginWithEmailAndPassworThunk.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message;
+      })
+      .addCase(logoutThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.isAuthenticated = false;
+        state.user = action.payload;
+        state.error = null;
+      })
+      .addCase(logoutThunk.rejected, (state, action) => {
+        (state.loading = false), (state.error = action.error.message);
+      })
+      .addCase(googleLoginThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(googleLoginThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.isAuthenticated = true;
+        state.user = action.payload;
+        state.error = null;
+      })
+      .addCase(googleLoginThunk.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message;
+      });
+  },
+});
+
+const authReducer = authSlice.reducer;
+export default authReducer;
+
+export const { clearError } = authSlice.actions;
+
+```
+4. Desde el componente `Login.jsx` disparar la acción asíncrona (thunk) en el onClick del botón inicio de sesión con google
+
+```javascript
+import { ErrorMessage, Field, Form, Formik } from "formik";
+import { useDispatch, useSelector } from "react-redux";
+import { Link, useNavigate } from "react-router-dom";
+import * as Yup from "yup";
+import {
+  clearError,
+  googleLoginThunk,
+  loginWithEmailAndPassworThunk,
+} from "../../redux/auth/authSlice";
+import Swal from "sweetalert2";
+
+const validationSchema = Yup.object().shape({
+  email: Yup.string()
+    .email("Ingrese un correo electrónico válido")
+    .required("El correo electrónico es obligatorio"),
+  password: Yup.string().required("La contraseña es obligatoria"),
+});
+
+const Login = () => {
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const { error, isAuthenticated, user } = useSelector((store) => store.auth);
+
+  const handleGoogleLogin = () => {
+    dispatch(googleLoginThunk())
+  }
+
+  if (error) {
+    Swal.fire({
+      title: "Oops!",
+      text: "¡Ha ocurrido un error en el inicio de sesión! Verifique sus credenciales",
+      icon: "error",
+    }).then(() => dispatch(clearError()));
+  }
+
+  if (isAuthenticated) {
+    Swal.fire({
+      title: "¡Has iniciado sesión exitosamente!",
+      text: `¡Te damos la bienvenida, ${user?.displayName}!`,
+      icon: "success",
+    }).then(() => navigate("/"));
+  }
+
+  return (
+    <main>
+      <h1>Iniciar Sesión</h1>
+      <Formik
+        initialValues={{
+          email: "",
+          password: "",
+        }}
+        validationSchema={validationSchema}
+        onSubmit={(values, { setSubmitting }) => {
+          dispatch(loginWithEmailAndPassworThunk(values));
+          setSubmitting(false);
+        }}
+      >
+        {({ isSubmitting }) => (
+          <Form>
+            <label htmlFor="email">Correo electrónico:</label>
+            <Field
+              type="email"
+              name="email"
+              id="email"
+              placeholder="ejemplo@email.com"
+            />
+            <ErrorMessage name="email" />
+
+            <label htmlFor="password">Contraseña:</label>
+            <Field
+              type="password"
+              name="password"
+              id="password"
+              placeholder="Ingrese su contraseña"
+            />
+            <ErrorMessage name="password" />
+
+            <button type="submit" disabled={isSubmitting}>
+              Iniciar sesión
+            </button>
+          </Form>
+        )}
+      </Formik>
+      <p>
+        Si aún no tiene una cuenta, por favor dar click{" "}
+        <Link to={"/register"}>aquí!</Link>
+      </p>
+      <section>
+        <span>o, también puedes iniciar sesión con:</span>
+        <div>
+          <button onClick={handleGoogleLogin}>Iniciar sesión con google</button>
+          <button>Iniciar sesión con teléfono</button>
+        </div>
+      </section>
+    </main>
+  );
+};
+
+export default Login;
+```
+## Inicio de sesión con número celular
+1. Activar el proveedor de acceso desde la consola de firebase
+2. Construimos el componente donde el usuario va a ingresar el número telefónico y donde se ejecutará la función de enviar SMS
+	- En la estructura de carpetas
+		```
+		└── 📁src
+		    └── 📁components
+		        └── 📁Layout
+		            └── Layout.jsx
+		    └── 📁Firebase
+		        └── firebaseConfig.js
+		    └── 📁pages
+		        └── 📁Feed
+		            └── Feed.jsx
+		        └── 📁Login
+		            └── Login.jsx
+		        └── 📁PhoneLogin
+		            └── PhoneLogin.jsx
+		        └── 📁PostDetails
+		            └── PostDetails.jsx
+		        └── 📁Profile
+		            └── Profile.jsx
+		        └── 📁Register
+		            └── Register.jsx
+		    └── 📁redux
+		        └── 📁auth
+		            └── authSlice.js
+		        └── store.js
+		    └── 📁router
+		        └── AppRouter.jsx
+		        └── PriveRoutes.jsx
+		        └── PublicRoutes.jsx
+		    └── 📁services
+		        └── uploadFiles.js
+		    └── main.jsx
+		```
+	- Definir la ruta para la página de inicio de sesión por número celular:
+  
+		```javascript
+		import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+		import Layout from "../components/Layout/Layout";
+		import Feed from "../pages/Feed/Feed";
+		import Register from "../pages/Register/Register";
+		import Login from "../pages/Login/Login";
+		import PostDetails from "../pages/PostDetails/PostDetails";
+		import Profile from "../pages/Profile/Profile";
+		import PhoneLogin from "../pages/PhoneLogin/PhoneLogin";
+		
+		const AppRouter = () => {
+		  return (
+		    <BrowserRouter>
+		      <Routes>
+		        <Route path="/" element={<Layout />}>
+		          <Route index element={<Feed />} />
+		          <Route path="post/:postId" element={<PostDetails />} />
+		          <Route path="profile/:userId" element={<Profile />} />
+		          <Route path="register" element={<Register />} />
+		          <Route path="login" element={<Login />} />
+		          <Route path="phoneLogin" element={<PhoneLogin/> } />
+		          <Route path="*" element={<Navigate to={'/' } /> } />
+		        </Route>
+		      </Routes>
+		    </BrowserRouter>
+		  );
+		};
+		
+		export default AppRouter;
+		```
+
+	- En el componente `Login.jsx`, le colocamos el evento onClik al botón de inicio de sesión por número celular. Ese botón solamente va a navegar hacia la página de inicio de sesión con teléfono
+
+		```javascript
+		import { ErrorMessage, Field, Form, Formik } from "formik";
+		import { useDispatch, useSelector } from "react-redux";
+		import { Link, useNavigate } from "react-router-dom";
+		import * as Yup from "yup";
+		import {
+		  clearError,
+		  googleLoginThunk,
+		  loginWithEmailAndPassworThunk,
+		} from "../../redux/auth/authSlice";
+		import Swal from "sweetalert2";
+		
+		const validationSchema = Yup.object().shape({
+		  email: Yup.string()
+		    .email("Ingrese un correo electrónico válido")
+		    .required("El correo electrónico es obligatorio"),
+		  password: Yup.string().required("La contraseña es obligatoria"),
+		});
+		
+		const Login = () => {
+		  const navigate = useNavigate();
+		  const dispatch = useDispatch();
+		  const { error, isAuthenticated, user } = useSelector((store) => store.auth);
+		
+		  const handleGoogleLogin = () => {
+		    dispatch(googleLoginThunk());
+		  };
+		
+		  const handleNavigatePhoneLogin = () => navigate("/phoneLogin");
+		
+		  if (error) {
+		    Swal.fire({
+		      title: "Oops!",
+		      text: "¡Ha ocurrido un error en el inicio de sesión! Verifique sus credenciales",
+		      icon: "error",
+		    }).then(() => dispatch(clearError()));
+		  }
+		
+		  if (isAuthenticated) {
+		    Swal.fire({
+		      title: "¡Has iniciado sesión exitosamente!",
+		      text: `¡Te damos la bienvenida, ${user?.displayName}!`,
+		      icon: "success",
+		    }).then(() => navigate("/"));
+		  }
+		
+		  return (
+		    <main>
+		      <h1>Iniciar Sesión</h1>
+		      <Formik
+		        initialValues={{
+		          email: "",
+		          password: "",
+		        }}
+		        validationSchema={validationSchema}
+		        onSubmit={(values, { setSubmitting }) => {
+		          dispatch(loginWithEmailAndPassworThunk(values));
+		          setSubmitting(false);
+		        }}
+		      >
+		        {({ isSubmitting }) => (
+		          <Form>
+		            <label htmlFor="email">Correo electrónico:</label>
+		            <Field
+		              type="email"
+		              name="email"
+		              id="email"
+		              placeholder="ejemplo@email.com"
+		            />
+		            <ErrorMessage name="email" />
+		
+		            <label htmlFor="password">Contraseña:</label>
+		            <Field
+		              type="password"
+		              name="password"
+		              id="password"
+		              placeholder="Ingrese su contraseña"
+		            />
+		            <ErrorMessage name="password" />
+		
+		            <button type="submit" disabled={isSubmitting}>
+		              Iniciar sesión
+		            </button>
+		          </Form>
+		        )}
+		      </Formik>
+		      <p>
+		        Si aún no tiene una cuenta, por favor dar click{" "}
+		        <Link to={"/register"}>aquí!</Link>
+		      </p>
+		      <section>
+		        <span>o, también puedes iniciar sesión con:</span>
+		        <div>
+		          <button onClick={handleGoogleLogin}>Iniciar sesión con google</button>
+		          <button onClick={handleNavigatePhoneLogin}>
+		            Iniciar sesión con teléfono
+		          </button>
+		        </div>
+		      </section>
+		    </main>
+		  );
+		};
+		
+		export default Login;
+		
+		```
+
+	- Construir el componente `PhoneLogin.jsx` y las funciones necesarias para enviar el SMS con el código de verificación
+
+		```javascript
+		import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
+		import { ErrorMessage, Field, Form, Formik } from "formik";
+		import * as Yup from "yup";
+		import { auth } from "../../Firebase/firebaseConfig";
+		import Swal from "sweetalert2";
+		import { useNavigate } from "react-router-dom";
+		
+		const validationSchema = Yup.object().shape({
+		  phone: Yup.string()
+		    .required("Por favor ingrese un número celular")
+		    .matches(/^[0-9]+$/, "Debe contener solo números del 0 al 9")
+		    .max(10, "El número celular debe tener 10 dígitos")
+		    .min(10, "El número celular debe tener 10 dígitos"),
+		});
+		
+		const PhoneLogin = () => {
+		  const navigate = useNavigate();
+		
+		  const generateRecaptcha = () => {
+		    try {
+		      window.recaptchaVerifier = new RecaptchaVerifier(
+		        auth,
+		        "recaptcha-container",
+		        {
+		          size: "invisible",
+		          callback: () => {},
+		        }
+		      );
+		    } catch (error) {
+		      console.error(error);
+		    }
+		  };
+		
+		  const sendSMS = (phone, recaptchaVerifier) => {
+		    signInWithPhoneNumber(auth, `+57${phone}`, recaptchaVerifier)
+		      .then((response) => {
+		        window.confirmationResult = response;
+		        console.log(response);
+		        Swal.fire(
+		          "Excelente",
+		          `Te enviaremos un mensaje para confirmar a ${phone}`,
+		          "success"
+		        ).then(() => navigate(`/verificationCode/+57${phone}`));
+		      })
+		      .catch((error) => {
+		        console.error(error);
+		        Swal.fire(
+		          "Oops!",
+		          `Ocurrió un error al realizar tu solicitud ${error.message}`,
+		          "error"
+		        );
+		      });
+		  };
+		
+		  return (
+		    <main>
+		      <h1>Iniciar sesión con tu número celular</h1>
+		      <Formik
+		        initialValues={{
+		          phone: "",
+		        }}
+		        validationSchema={validationSchema}
+		        onSubmit={(values, { setSubmitting }) => {
+		          generateRecaptcha();
+		          const appVerifier = window.recaptchaVerifier;
+		          sendSMS(values.phone, appVerifier);
+		          setSubmitting(false);
+		        }}
+		      >
+		        {({ isSubmitting }) => (
+		          <Form>
+		            <label htmlFor="phone">Número celular:</label>
+		            <Field
+		              type="number"
+		              name="phone"
+		              id="phone"
+		              placeholder="Ingrese su número celular"
+		            />
+		            <ErrorMessage name="phone" />
+		            <button type="submit" disabled={isSubmitting}>
+		              Enviar SMS
+		            </button>
+		          </Form>
+		        )}
+		      </Formik>
+		      <div id="recaptcha-container"></div>
+		    </main>
+		  );
+		};
+		
+		export default PhoneLogin;
+		
+		
+		```
+3. Creamos el thunk que validará el código en `authSlice.js`
+4. Agregamos los casos en el extrareducers
+	```javascript
+	
+	import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+	import {
+	  createUserWithEmailAndPassword,
+	  GoogleAuthProvider,
+	  signInWithEmailAndPassword,
+	  signInWithPopup,
+	  signOut,
+	  updateProfile,
+	} from "firebase/auth";
+	import { auth } from "../../Firebase/firebaseConfig";
+	
+	export const createAccountThunk = createAsyncThunk(
+	  "auth/createAccount",
+	  async ({ email, password, name, photo }) => {
+	    const userCredentials = await createUserWithEmailAndPassword(
+	      auth,
+	      email,
+	      password
+	    );
+	    await updateProfile(auth.currentUser, {
+	      displayName: name,
+	      photoURL: photo,
+	    });
+	    return {
+	      id: userCredentials.user.uid,
+	      displayName: name,
+	      email: email,
+	      accessToken: userCredentials.user.accessToken,
+	      photoURL: photo,
+	    };
+	  }
+	);
+	
+	export const loginWithEmailAndPassworThunk = createAsyncThunk(
+	  "auth/login",
+	  async ({ email, password }) => {
+	    const { user } = await signInWithEmailAndPassword(auth, email, password);
+	    return {
+	      id: user.uid,
+	      displayName: user.displayName,
+	      email: email,
+	      accessToken: user.accessToken,
+	      photoURL: user.photoURL,
+	    };
+	  }
+	);
+	
+	export const logoutThunk = createAsyncThunk("auth/logout", async () => {
+	  await signOut(auth);
+	  return null;
+	});
+	
+	export const googleLoginThunk = createAsyncThunk(
+	  "auth/googleLogin",
+	  async () => {
+	    const googleProvider = new GoogleAuthProvider();
+	    const { user } = await signInWithPopup(auth, googleProvider);
+	    return {
+	      id: user.uid,
+	      displayName: user.displayName,
+	      accessToken: user.accessToken,
+	      photoURL: user.photoURL,
+	      email: user.email,
+	    };
+	  }
+	);
+	
+	export const loginWithVerificationCodeThunk = createAsyncThunk(
+	  "auth/loginWithVerificationCode",
+	  async (code, { rejectWithValue }) => {
+	    try {
+	      const confirmationResult = window.confirmationResult;
+	      if (!confirmationResult) {
+	        throw new Error("No hay resultado de confirmación disponible");
+	      }
+	      const { user } = await confirmationResult.confirm(code);
+	
+	      return {
+	        id: user.uid,
+	        displayName: user.displayName,
+	        photoURL: user.photoURL,
+	        phoneNumber: user.phoneNumber,
+	        accessToken: user.accessToken,
+	      };
+	    } catch (error) {
+	      return rejectWithValue(error.message || "Error en la verificación");
+	    }
+	  }
+	);
+	
+	const authSlice = createSlice({
+	  name: "auth",
+	  initialState: {
+	    isAuthenticated: false,
+	    user: null,
+	    loading: false,
+	    error: null,
+	  },
+	  reducers: {
+	    clearError: (state) => {
+	      state.error = null;
+	    },
+	  },
+	  extraReducers: (builder) => {
+	    builder
+	      .addCase(createAccountThunk.pending, (state) => {
+	        state.loading = true;
+	        state.error = null;
+	      })
+	      .addCase(createAccountThunk.fulfilled, (state, action) => {
+	        state.loading = false;
+	        state.isAuthenticated = true;
+	        state.user = action.payload;
+	        state.error = null;
+	      })
+	      .addCase(createAccountThunk.rejected, (state, action) => {
+	        state.loading = false;
+	        state.error = action.error.message;
+	      })
+	      .addCase(loginWithEmailAndPassworThunk.pending, (state) => {
+	        state.loading = true;
+	        state.error = null;
+	      })
+	      .addCase(loginWithEmailAndPassworThunk.fulfilled, (state, action) => {
+	        state.loading = false;
+	        state.isAuthenticated = true;
+	        state.user = action.payload;
+	        state.error = null;
+	      })
+	      .addCase(loginWithEmailAndPassworThunk.rejected, (state, action) => {
+	        state.loading = false;
+	        state.error = action.error.message;
+	      })
+	      .addCase(logoutThunk.fulfilled, (state, action) => {
+	        state.loading = false;
+	        state.isAuthenticated = false;
+	        state.user = action.payload;
+	        state.error = null;
+	      })
+	      .addCase(logoutThunk.rejected, (state, action) => {
+	        (state.loading = false), (state.error = action.error.message);
+	      })
+	      .addCase(googleLoginThunk.pending, (state) => {
+	        state.loading = true;
+	        state.error = null;
+	      })
+	      .addCase(googleLoginThunk.fulfilled, (state, action) => {
+	        state.loading = false;
+	        state.isAuthenticated = true;
+	        state.user = action.payload;
+	        state.error = null;
+	      })
+	      .addCase(googleLoginThunk.rejected, (state, action) => {
+	        state.loading = false;
+	        state.error = action.error.message;
+	      }).addCase(loginWithVerificationCodeThunk.pending, (state) => {
+	        state.loading = true;
+	        state.error = null;
+	      }).addCase(loginWithVerificationCodeThunk.fulfilled, (state, action) => {
+	        state.loading = false;
+	        state.isAuthenticated = true;
+	        state.user = action.payload;
+	        state.error = null;
+	      }).addCase(loginWithVerificationCodeThunk.rejected, (state, action) => {
+	        state.loading = false;
+	        state.error = action.payload;
+	      })
+	  },
+	});
+	
+	const authReducer = authSlice.reducer;
+	export default authReducer;
+	
+	export const { clearError } = authSlice.actions;
+	
+	```
+5. Construimos el componente donde el usuario ingresará el código y se disparará el thunk de verificación de código.
+	- En la estructura de carpetas:
+	```
+	└── 📁src
+	    └── 📁components
+	        └── 📁Layout
+	            └── Layout.jsx
+	    └── 📁Firebase
+	        └── firebaseConfig.js
+	    └── 📁pages
+	        └── 📁Feed
+	            └── Feed.jsx
+	        └── 📁Login
+	            └── Login.jsx
+	        └── 📁PhoneLogin
+	            └── PhoneLogin.jsx
+	        └── 📁PostDetails
+	            └── PostDetails.jsx
+	        └── 📁Profile
+	            └── Profile.jsx
+	        └── 📁Register
+	            └── Register.jsx
+	        └── 📁VerificationCode
+	            └── VerificationCode.jsx
+	    └── 📁redux
+	        └── 📁auth
+	            └── authSlice.js
+	        └── store.js
+	    └── 📁router
+	        └── AppRouter.jsx
+	        └── PrivateRoutes.jsx
+	        └── PublicRoutes.jsx
+	    └── 📁services
+	        └── uploadFiles.js
+	    └── main.jsx
+	```
+	- En la definición de las rutas:
+	```javascript
+	import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+	import Layout from "../components/Layout/Layout";
+	import Feed from "../pages/Feed/Feed";
+	import Register from "../pages/Register/Register";
+	import Login from "../pages/Login/Login";
+	import PostDetails from "../pages/PostDetails/PostDetails";
+	import Profile from "../pages/Profile/Profile";
+	import PhoneLogin from "../pages/PhoneLogin/PhoneLogin";
+	import VerificationCode from "../pages/VerificationCode/VerificationCode";
+	
+	const AppRouter = () => {
+	  return (
+	    <BrowserRouter>
+	      <Routes>
+	        <Route path="/" element={<Layout />}>
+	          <Route index element={<Feed />} />
+	          <Route path="post/:postId" element={<PostDetails />} />
+	          <Route path="profile/:userId" element={<Profile />} />
+	          <Route path="register" element={<Register />} />
+	          <Route path="login" element={<Login />} />
+	          <Route path="phoneLogin" element={<PhoneLogin/> } />
+		  <Route path="verificationCode/:phoneNumber" element={<VerificationCode />} />
+	          <Route path="*" element={<Navigate to={'/' } /> } />
+	        </Route>
+	      </Routes>
+	    </BrowserRouter>
+	  );
+	};
+	
+	export default AppRouter;
+	```
+	- En el mismo componente `VerificationCode.jsx`
+
+	```javascript
+	import { ErrorMessage, Field, Form, Formik } from "formik";
+	import { useDispatch, useSelector } from "react-redux";
+	import * as Yup from "yup";
+	import {
+	  clearError,
+	  loginWithVerificationCodeThunk,
+	} from "../../redux/auth/authSlice";
+	import Swal from "sweetalert2";
+	import { useNavigate } from "react-router-dom";
+	
+	const VerificationCode = () => {
+	  const navigate = useNavigate();
+	  const dispatch = useDispatch();
+	  const { error, isAuthenticated, user } = useSelector((store) => store.auth);
+	
+	  if (error) {
+	    Swal.fire({
+	      title: "Oops!",
+	      text: "¡Ha ocurrido un error en el inicio de sesión! Intente nuevamente",
+	      icon: "error",
+	    }).then(() => dispatch(clearError()));
+	  }
+	  if (isAuthenticated) {
+	    Swal.fire({
+	      title: "¡Has iniciado sesión exitosamente!",
+	      text: user?.displayName
+	        ? `¡Te damos la bienvenida, ${user?.displayName}!`
+	        : "¡Te damos la bienvenida!",
+	      icon: "success",
+	    }).then(() => navigate("/"));
+	  }
+	  return (
+	    <main>
+	      <h1>Ingresar código de verificación</h1>
+	      <Formik
+	        initialValues={{
+	          code: "",
+	        }}
+	        validationSchema={Yup.object().shape({
+	          code: Yup.string()
+	            .required("Por favor ingrese un código de verificación")
+	            .matches(/^[0-9]+$/, "Debe contener solo números del 0 al 9")
+	            .max(6, "El código de verificación debe tener 6 dígitos")
+	            .min(6, "El código de verificación debe tener 6 dígitos"),
+	        })}
+	        onSubmit={(values, { setSubmitting }) => {
+	          dispatch(loginWithVerificationCodeThunk(values.code));
+	
+	          setSubmitting(false);
+	        }}
+	      >
+	        {({ isSubmitting }) => (
+	          <Form>
+	            <label htmlFor="code">Código de verificación</label>
+	            <Field type="number" name="code" id="code" />
+	            <ErrorMessage name="code" />
+	
+	            <button type="submit" disabled={isSubmitting}>
+	              Iniciar sesión
+	            </button>
+	          </Form>
+	        )}
+	      </Formik>
+	    </main>
+	  );
+	};
+	
+	export default VerificationCode;
+	```
+## Implementación de observador de sesión y protección de rutas
+1. En el componente `AppRouter.jsx`, utilizamos `useEffect` para ejecutar la función `onAuthStateChanged` de `firebase/auth`. Esta función va a verificar si hay o no hay una sesión activa. En el caso de que haya una sesión activa se va a disparar una acción que permite la restauranción de la información del usuario en el store.
+
+2. Colocamos la lógica de los componentes `PrivateRoutes.jsx` y `PublicRoutes.jsx` para manejar la protección de rutas.
+
+3. Desde `AppRouter.jsx`, definimos las rutas privadas y públicas.
+
+	- Código de `AppRouter.jsx`
+		```javascript
+		import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+		import Layout from "../components/Layout/Layout";
+		import Feed from "../pages/Feed/Feed";
+		import Register from "../pages/Register/Register";
+		import Login from "../pages/Login/Login";
+		import PostDetails from "../pages/PostDetails/PostDetails";
+		import Profile from "../pages/Profile/Profile";
+		import PhoneLogin from "../pages/PhoneLogin/PhoneLogin";
+		import VerificationCode from "../pages/VerificationCode/VerificationCode";
+		import { useEffect, useState } from "react";
+		import { onAuthStateChanged } from "firebase/auth";
+		import { auth } from "../Firebase/firebaseConfig";
+		import { useDispatch, useSelector } from "react-redux";
+		import { restoreSession } from "../redux/auth/authSlice";
+		import PrivateRoutes from "./PrivateRoutes";
+		import PublicRoutes from "./PublicRoutes";
+		
+		const AppRouter = () => {
+		  const dispatch = useDispatch();
+		  const { loading, isAuthenticated } = useSelector((store) => store.auth);
+		  const [checking, setChecking] = useState(true);
+		
+		  useEffect(() => {
+		    onAuthStateChanged(auth, (authUser) => {
+		      if (authUser) {
+		        const loggedInUser = {
+		          id: authUser.uid,
+		          displayName: authUser.displayName,
+		          email: authUser.email || null,
+		          phoneNumber: authUser.phoneNumber || null,
+		          accessToken: authUser.accessToken,
+		          photoURL: authUser.photoURL,
+		        };
+		        dispatch(restoreSession(loggedInUser));
+		      }
+		      setChecking(false);
+		    });
+		  }, [dispatch]);
+		
+		  if (loading || checking) return <div>...Cargando</div>;
+		
+		  return (
+		    <BrowserRouter>
+		      <Routes>
+		        <Route path="/" element={<Layout />}>
+		          <Route element={<PrivateRoutes isAuthenticated={isAuthenticated} />}>
+		            <Route index element={<Feed />} />
+		            <Route path="post/:postId" element={<PostDetails />} />
+		            <Route path="profile/:userId" element={<Profile />} />
+		          </Route>
+		          <Route element={<PublicRoutes isAuthenticated={isAuthenticated} />}>
+		            <Route path="register" element={<Register />} />
+		            <Route path="login" element={<Login />} />
+		            <Route path="phoneLogin" element={<PhoneLogin />} />
+		            <Route
+		              path="verificationCode/:phoneNumber"
+		              element={<VerificationCode />}
+		            />
+		          </Route>
+		
+		          <Route path="*" element={<Navigate to={"/"} />} />
+		        </Route>
+		      </Routes>
+		    </BrowserRouter>
+		  );
+		};
+		
+		export default AppRouter;
+		
+		```
+	- `PublicRoutes.jsx`
+		```javascript
+		import { Navigate, Outlet } from "react-router-dom";
+		import PropTypes from "prop-types";
+		
+		const PublicRoutes = ({ isAuthenticated, redirectPath = "/", children }) => {
+		  if (isAuthenticated) {
+		    return <Navigate replace to={redirectPath} />;
+		  }
+		  return children || <Outlet />;
+		};
+		
+		PublicRoutes.propTypes = {
+		  isAuthenticated: PropTypes.bool.isRequired,
+		  redirectPath: PropTypes.string,
+		  children: PropTypes.node,
+		};
+		
+		export default PublicRoutes;
+		```
+	- `PrivateRoutes.jsx`
+		```javascript
+		import { Navigate, Outlet } from "react-router-dom";
+		import PropTypes from "prop-types";
+		
+		const PrivateRoutes = ({
+		  isAuthenticated,
+		  redirectPath = "/login",
+		  children,
+		}) => {
+		  if (!isAuthenticated) {
+		    return <Navigate replace to={redirectPath} />;
+		  }
+		  return children || <Outlet />;
+		};
+		
+		PrivateRoutes.propTypes = {
+		  isAuthenticated: PropTypes.bool.isRequired,
+		  redirectPath: PropTypes.string,
+		  children: PropTypes.node,
+		};
+		
+		export default PrivateRoutes;
+		```
+
+# CLASE LUNES SEPT 09/2024
+## ¿Cómo manejar diseño responsivo con un hook personalizado?
