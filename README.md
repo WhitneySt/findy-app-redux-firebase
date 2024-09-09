@@ -1937,4 +1937,616 @@ export default Login;
 		```
 
 # CLASE LUNES SEPT 09/2024
+## ¿Qué hacer si necesitamos guardar datos adicionales del usuario en nuestra aplicación?
+Complementar el servicio de autenticación de Firebase con el servicio de base de datos (Firestore).
+### ¿Cómo se implementa Firestore junto con Firebase Auth?
+1. Activar e inicializar el servicio de firestore tanto en la consola de Firebase como en la configuración del proyecto.
+	- Desde la consola de Firebase:
+		1. Activar el servicio de Firestore y crear la base de datos (Si aún no se ha realizado)
+     		2. Crear una colección separada `users` en Firestore para almacenar todos los datos del usuario.
+	- Desde el proyecto en el archivo `firebaseConfig.js`
+		1. Iniciarlizar el servicio de Firestore con el método `getFirestore` de `firebase/firestore`
+		     ```javascript
+			// Import the functions you need from the SDKs you need
+			import { initializeApp } from "firebase/app";
+			import { getAuth } from "firebase/auth";
+			import { getFirestore } from "firebase/firestore";
+			// TODO: Add SDKs for Firebase products that you want to use
+			// https://firebase.google.com/docs/web/setup#available-libraries
+			
+			// Your web app's Firebase configuration
+			const firebaseConfig = {
+			
+			};
+			
+			// Initialize Firebase
+			const app = initializeApp(firebaseConfig);
+			export const auth = getAuth(app);
+			export const database = getFirestore(app)
+		     ```
+3. Integrar firestore en los thunks de autenticación en `authSlice.js`
+	- En el thunk donde se crea una cuenta con email y contraseña
+		```javascript
+		const collectionName = "users";
+		
+		export const createAccountThunk = createAsyncThunk(
+		  "auth/createAccount",
+		  async ({ email, password, name, photo }) => {
+		    const userCredentials = await createUserWithEmailAndPassword(
+		      auth,
+		      email,
+		      password
+		    );
+		    await updateProfile(auth.currentUser, {
+		      displayName: name,
+		      photoURL: photo,
+		    });
+		
+		    //Crear o guardar el usuario en la base de datos
+		
+		    const newUser = {
+		      id: userCredentials.user.uid,
+		      displayName: name,
+		      email: email,
+		      accessToken: userCredentials.user.accessToken,
+		      photoURL: photo,
+		      isAdmin: false
+		      //Incluir el resto de la información (o propiedades) que necesiten guardar del usuario
+		    };
+		
+		    //Armamos la referencia del nuevo usuario a guarda
+		    const userRef = doc(database, collectionName, userCredentials.user.uid);
+		    //Se guarda el usuario con la referencia que se creó en la línea anterior
+		    await setDoc(userRef, newUser);
+		    return newUser;
+		  }
+		);
+		```
+	- En el thunk donde se inicia sesión con email y contraseña
+		```javascript
+		export const loginWithEmailAndPassworThunk = createAsyncThunk(
+		  "auth/login",
+		  async ({ email, password }) => {
+		    const { user } = await signInWithEmailAndPassword(auth, email, password);
+		
+		    //Obtener la información del usuario en la base de datos
+		    const userRef = doc(database, collectionName, user.uid);
+		    const userDoc = await getDoc(userRef);
+		
+		    if (userDoc.exists()) {
+		      return userDoc.data()
+		    } else {
+		      throw new Error('No se encontraron datos del usuario')
+		    }    
+		  }
+		);
+		```
+	- En el thunk donde se inicia sesión con una cuenta google
+		```javascript
+		export const googleLoginThunk = createAsyncThunk(
+		  "auth/googleLogin",
+		  async () => {
+		    const googleProvider = new GoogleAuthProvider();
+		    const { user } = await signInWithPopup(auth, googleProvider);
+		
+		    //Se busca la información del usuario en la base de datos. Si no existe el usuario se crea y si existe se obtiene la información
+		    let newUser = null;
+		    const userRef = doc(database, collectionName, user.uid);
+		    const userDoc = await getDoc(userRef);
+		
+		    if (userDoc.exists()) {
+		      newUser = userDoc.data();
+		    } else {
+		      newUser = {
+		        id: user.uid,
+		        displayName: user.displayName,
+		        accessToken: user.accessToken,
+		        photoURL: user.photoURL,
+		        email: user.email,
+		        isAdmin: false,
+		        //Incluir el resto de la información que deben guardar
+		        city: null,
+		      };
+		      await setDoc(userRef, newUser);
+		    }
+		
+		    return newUser;
+		  }
+		);
+		```
+	- En el thunk donde se inicia sesión con telefono / código de verificación
+		```javascript
+		export const loginWithVerificationCodeThunk = createAsyncThunk(
+		  "auth/loginWithVerificationCode",
+		  async (code, { rejectWithValue }) => {
+		    try {
+		      const confirmationResult = window.confirmationResult;
+		      if (!confirmationResult) {
+		        throw new Error("No hay resultado de confirmación disponible");
+		      }
+		      const { user } = await confirmationResult.confirm(code);
+		
+		      //Se busca la información del usuario en la base de datos. Si no existe el usuario se crea y si existe se obtiene la información
+		
+		      let newUser = null;
+		      const userRef = doc(database, collectionName, user.uid);
+		      const userDoc = await getDoc(userRef);
+		
+		      if (userDoc.exists()) {
+		        newUser = userDoc.data();
+		      } else {
+		        newUser = {
+		          id: user.uid,
+		          displayName: user.displayName,
+		          accessToken: user.accessToken,
+		          photoURL: user.photoURL,
+		          email: user.email,
+		          phoneNumber: user.phoneNumber,
+		          isAdmin: false,
+		          //Incluir el resto de la información que deben guardar
+		          city: null,
+		        };
+		        await setDoc(userRef, newUser);
+		      }
+		
+		      return newUser;
+		    } catch (error) {
+		      return rejectWithValue(error.message || "Error en la verificación");
+		    }
+		  }
+		);
+		```
+5. Ajustar el estado de atenticación en el componente `AppRouter.js` en el lugar donde se está ejecutando la función `onAuthChanged` de Firebase
+   	- En el archivo `authSlice.js`
+		- Se crear un thunk que permita restaurar la sesión activa, es decir, recuperar los datos del usuario desde la base de datos y alimentar el store
+		- Agregar los casos de cómo se actualiza el slice `auth` cuando se ejecutan los tres estados de la operación asíncrono en la propiedad `extraReducers`
+			```javascript
+			import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+			import {
+			  createUserWithEmailAndPassword,
+			  GoogleAuthProvider,
+			  signInWithEmailAndPassword,
+			  signInWithPopup,
+			  signOut,
+			  updateProfile,
+			} from "firebase/auth";
+			import { auth, database } from "../../Firebase/firebaseConfig";
+			import { doc, getDoc, setDoc } from "firebase/firestore";
+			
+			const collectionName = "users";
+			
+			export const createAccountThunk = createAsyncThunk(
+			  "auth/createAccount",
+			  async ({ email, password, name, photo }) => {
+			    const userCredentials = await createUserWithEmailAndPassword(
+			      auth,
+			      email,
+			      password
+			    );
+			    await updateProfile(auth.currentUser, {
+			      displayName: name,
+			      photoURL: photo,
+			    });
+			
+			    //Crear o guardar el usuario en la base de datos
+			
+			    const newUser = {
+			      id: userCredentials.user.uid,
+			      displayName: name,
+			      email: email,
+			      accessToken: userCredentials.user.accessToken,
+			      photoURL: photo,
+			      isAdmin: false,
+			      //Incluir el resto de la información (o propiedades) que necesiten guardar del usuario
+			    };
+			
+			    //Armamos la referencia del nuevo usuario a guarda
+			    const userRef = doc(database, collectionName, userCredentials.user.uid);
+			    //Se guarda el usuario con la referencia que se creó en la línea anterior
+			    await setDoc(userRef, newUser);
+			    return newUser;
+			  }
+			);
+			
+			export const loginWithEmailAndPassworThunk = createAsyncThunk(
+			  "auth/login",
+			  async ({ email, password }) => {
+			    const { user } = await signInWithEmailAndPassword(auth, email, password);
+			
+			    //Obtener la información del usuario en la base de datos
+			    const userRef = doc(database, collectionName, user.uid);
+			    const userDoc = await getDoc(userRef);
+			
+			    if (userDoc.exists()) {
+			      return userDoc.data();
+			    } else {
+			      throw new Error("No se encontraron datos del usuario");
+			    }
+			  }
+			);
+			
+			export const logoutThunk = createAsyncThunk("auth/logout", async () => {
+			  await signOut(auth);
+			  return null;
+			});
+			
+			export const googleLoginThunk = createAsyncThunk(
+			  "auth/googleLogin",
+			  async () => {
+			    const googleProvider = new GoogleAuthProvider();
+			    const { user } = await signInWithPopup(auth, googleProvider);
+			
+			    //Se busca la información del usuario en la base de datos. Si no existe el usuario se crea y si existe se obtiene la información
+			    let newUser = null;
+			    const userRef = doc(database, collectionName, user.uid);
+			    const userDoc = await getDoc(userRef);
+			
+			    if (userDoc.exists()) {
+			      newUser = userDoc.data();
+			    } else {
+			      newUser = {
+			        id: user.uid,
+			        displayName: user.displayName,
+			        accessToken: user.accessToken,
+			        photoURL: user.photoURL,
+			        email: user.email,
+			        isAdmin: false,
+			        //Incluir el resto de la información que deben guardar
+			        city: null,
+			      };
+			      await setDoc(userRef, newUser);
+			    }
+			
+			    return newUser;
+			  }
+			);
+			
+			export const loginWithVerificationCodeThunk = createAsyncThunk(
+			  "auth/loginWithVerificationCode",
+			  async (code, { rejectWithValue }) => {
+			    try {
+			      const confirmationResult = window.confirmationResult;
+			      if (!confirmationResult) {
+			        throw new Error("No hay resultado de confirmación disponible");
+			      }
+			      const { user } = await confirmationResult.confirm(code);
+			
+			      //Se busca la información del usuario en la base de datos. Si no existe el usuario se crea y si existe se obtiene la información
+			
+			      let newUser = null;
+			      const userRef = doc(database, collectionName, user.uid);
+			      const userDoc = await getDoc(userRef);
+			
+			      if (userDoc.exists()) {
+			        newUser = userDoc.data();
+			      } else {
+			        newUser = {
+			          id: user.uid,
+			          displayName: user.displayName,
+			          accessToken: user.accessToken,
+			          photoURL: user.photoURL,
+			          email: user.email,
+			          phoneNumber: user.phoneNumber,
+			          isAdmin: false,
+			          //Incluir el resto de la información que deben guardar
+			          city: null,
+			        };
+			        await setDoc(userRef, newUser);
+			      }
+			
+			      return newUser;
+			    } catch (error) {
+			      return rejectWithValue(error.message || "Error en la verificación");
+			    }
+			  }
+			);
+			
+			export const restoreActiveSessionThunk = createAsyncThunk(
+			  "auth/restoreActiveSession",
+			  async (userId) => {
+			    const userRef = doc(database, collectionName, userId);
+			    const userDoc = await getDoc(userRef);
+			    if (userDoc.exists()) {
+			      return userDoc.data();
+			    } else {
+			      throw new Error("Usuario no encontrado");
+			    }
+			  }
+			);
+			
+			const authSlice = createSlice({
+			  name: "auth",
+			  initialState: {
+			    isAuthenticated: false,
+			    user: null,
+			    loading: false,
+			    error: null,
+			  },
+			  reducers: {
+			    clearError: (state) => {
+			      state.error = null;
+			    },
+			    restoreSession: (state, action) => {
+			      state.loading = false;
+			      state.isAuthenticated = true;
+			      state.user = action.payload;
+			      state.error = null;
+			    },
+			  },
+			  extraReducers: (builder) => {
+			    builder
+			      .addCase(createAccountThunk.pending, (state) => {
+			        state.loading = true;
+			        state.error = null;
+			      })
+			      .addCase(createAccountThunk.fulfilled, (state, action) => {
+			        state.loading = false;
+			        state.isAuthenticated = true;
+			        state.user = action.payload;
+			        state.error = null;
+			      })
+			      .addCase(createAccountThunk.rejected, (state, action) => {
+			        state.loading = false;
+			        state.error = action.error.message;
+			      })
+			      .addCase(loginWithEmailAndPassworThunk.pending, (state) => {
+			        state.loading = true;
+			        state.error = null;
+			      })
+			      .addCase(loginWithEmailAndPassworThunk.fulfilled, (state, action) => {
+			        state.loading = false;
+			        state.isAuthenticated = true;
+			        state.user = action.payload;
+			        state.error = null;
+			      })
+			      .addCase(loginWithEmailAndPassworThunk.rejected, (state, action) => {
+			        state.loading = false;
+			        state.error = action.error.message;
+			      })
+			      .addCase(logoutThunk.fulfilled, (state, action) => {
+			        state.loading = false;
+			        state.isAuthenticated = false;
+			        state.user = action.payload;
+			        state.error = null;
+			      })
+			      .addCase(logoutThunk.rejected, (state, action) => {
+			        (state.loading = false), (state.error = action.error.message);
+			      })
+			      .addCase(googleLoginThunk.pending, (state) => {
+			        state.loading = true;
+			        state.error = null;
+			      })
+			      .addCase(googleLoginThunk.fulfilled, (state, action) => {
+			        state.loading = false;
+			        state.isAuthenticated = true;
+			        state.user = action.payload;
+			        state.error = null;
+			      })
+			      .addCase(googleLoginThunk.rejected, (state, action) => {
+			        state.loading = false;
+			        state.error = action.error.message;
+			      })
+			      .addCase(loginWithVerificationCodeThunk.pending, (state) => {
+			        state.loading = true;
+			        state.error = null;
+			      })
+			      .addCase(loginWithVerificationCodeThunk.fulfilled, (state, action) => {
+			        state.loading = false;
+			        state.isAuthenticated = true;
+			        state.user = action.payload;
+			        state.error = null;
+			      })
+			      .addCase(loginWithVerificationCodeThunk.rejected, (state, action) => {
+			        state.loading = false;
+			        state.error = action.payload;
+			      })
+			      .addCase(restoreActiveSessionThunk.pending, (state) => {
+			        state.loading = true;
+			        state.error = null;
+			      })
+			      .addCase(restoreActiveSessionThunk.fulfilled, (state, action) => {
+			        state.loading = false;
+			        state.isAuthenticated = true;
+			        state.user = action.payload;
+			        state.error = null;
+			      })
+			      .addCase(restoreActiveSessionThunk.rejected, (state, action) => {
+			        state.loading = false;
+			        state.error = action.error.message;
+			      });
+			  },
+			});
+			
+			const authReducer = authSlice.reducer;
+			export default authReducer;
+			
+			export const { clearError, restoreSession } = authSlice.actions;
+			```
+	- En `AppRouter.js`, se dispara el thunk `restoreActiveSessionThunk` para cuando se valida que hay una sesión activa en la función `onAuthStateChanged`. En este punto también podemos habilitar rutas o páginas para un rol determinado de usuario, por ejemplo si el para usuarios donde la propiedad `isAdmin` sea igual a `true`.
+		```javascript
+		import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+		import Layout from "../components/Layout/Layout";
+		import Feed from "../pages/Feed/Feed";
+		import Register from "../pages/Register/Register";
+		import Login from "../pages/Login/Login";
+		import PostDetails from "../pages/PostDetails/PostDetails";
+		import Profile from "../pages/Profile/Profile";
+		import PhoneLogin from "../pages/PhoneLogin/PhoneLogin";
+		import VerificationCode from "../pages/VerificationCode/VerificationCode";
+		import { useEffect, useState } from "react";
+		import { onAuthStateChanged } from "firebase/auth";
+		import { auth } from "../Firebase/firebaseConfig";
+		import { useDispatch, useSelector } from "react-redux";
+		import {
+		  restoreActiveSessionThunk,
+		  // restoreSession,
+		} from "../redux/auth/authSlice";
+		import PrivateRoutes from "./PrivateRoutes";
+		import PublicRoutes from "./PublicRoutes";
+		
+		const AppRouter = () => {
+		  const dispatch = useDispatch();
+		  const { loading, isAuthenticated, user } = useSelector((store) => store.auth);
+		  const [checking, setChecking] = useState(true);
+		
+		  useEffect(() => {
+		    onAuthStateChanged(auth, (authUser) => {
+		      if (authUser) {
+		        // const loggedInUser = {
+		        //   id: authUser.uid,
+		        //   displayName: authUser.displayName,
+		        //   email: authUser.email || null,
+		        //   phoneNumber: authUser.phoneNumber || null,
+		        //   accessToken: authUser.accessToken,
+		        //   photoURL: authUser.photoURL,
+		        // };
+		        dispatch(restoreActiveSessionThunk(authUser.uid));
+		      }
+		      setChecking(false);
+		    });
+		  }, [dispatch]);
+		
+		  if (loading || checking) return <div>...Cargando</div>;
+		
+		  return (
+		    <BrowserRouter>
+		      <Routes>
+		        <Route path="/" element={<Layout />}>
+		          <Route element={<PrivateRoutes isAuthenticated={isAuthenticated} />}>
+		            <Route index element={<Feed />} />
+		            <Route path="post/:postId" element={<PostDetails />} />
+		            <Route path="profile/:userId" element={<Profile />} />
+		            {user.isAdmin ? <Route path="dasboard" element={<Feed />} /> : null}
+		          </Route>
+		          <Route element={<PublicRoutes isAuthenticated={isAuthenticated} />}>
+		            <Route path="register" element={<Register />} />
+		            <Route path="login" element={<Login />} />
+		            <Route path="phoneLogin" element={<PhoneLogin />} />
+		            <Route
+		              path="verificationCode/:phoneNumber"
+		              element={<VerificationCode />}
+		            />
+		          </Route>
+		
+		          <Route path="*" element={<Navigate to={"/"} />} />
+		        </Route>
+		      </Routes>
+		    </BrowserRouter>
+		  );
+		};
+		
+		export default AppRouter;
+		```
 ## ¿Cómo manejar diseño responsivo con un hook personalizado?
+1. Crear un hook personalizado que detecte el cambio del tamaño del ancho de la pantalla del navegador.
+	- Los archivos del hook desde la estructura de carpetas
+		```
+		└── 📁src
+		    └── 📁components
+		        └── 📁DesktopNavbar
+		            └── DestopNavbar.jsx
+		        └── 📁Layout
+		            └── Layout.jsx
+		        └── 📁MobileNavbar
+		            └── MobileNavbar.jsx
+		    └── 📁Firebase
+		        └── firebaseConfig.js
+		    └── 📁hooks
+		        └── useScreenDetector.jsx
+		    └── 📁pages
+		        └── 📁Feed
+		            └── Feed.jsx
+		        └── 📁Login
+		            └── Login.jsx
+		        └── 📁PhoneLogin
+		            └── PhoneLogin.jsx
+		        └── 📁PostDetails
+		            └── PostDetails.jsx
+		        └── 📁Profile
+		            └── Profile.jsx
+		        └── 📁Register
+		            └── Register.jsx
+		        └── 📁VerificationCode
+		            └── VerificationCode.jsx
+		    └── 📁redux
+		        └── 📁auth
+		            └── authSlice.js
+		        └── store.js
+		    └── 📁router
+		        └── AppRouter.jsx
+		        └── PrivateRoutes.jsx
+		        └── PublicRoutes.jsx
+		    └── 📁services
+		        └── uploadFiles.js
+		    └── main.jsx
+		```
+	- Se crea el hook `useScreenDetector` en `useScreenDetector.jsx`:
+		```javascript
+		import { useEffect, useMemo, useState } from "react";
+		
+		//Definir las constantes para los breakpoints
+		
+		const MOBILE_BREAKPOINT = 768;
+		const TABLET_BREAKPOINT = 1024;
+		
+		const useScreenDetector = () => {
+		  //Definir un estado con useState para guardar el ancho actual de la pantalla
+		  const [width, setWidth] = useState(window.innerWidth);
+		
+		  useEffect(() => {
+		    const handleWindowSizeChange = () => setWidth(window.innerWidth);
+		    window.addEventListener("resize", handleWindowSizeChange);
+		
+		    return () => {
+		      window.removeEventListener("resize", handleWindowSizeChange);
+		    };
+		  }, []);
+		
+		  const screenType = useMemo(() => {
+		    if (width <= MOBILE_BREAKPOINT) return "mobile";
+		    if (width <= TABLET_BREAKPOINT) return "tablet";
+		    return "desktop";
+		  }, [width]);
+		
+		  return {
+		    isMobile: screenType === "mobile",
+		    isTablet: screenType === "tablet",
+		    isDesktop: screenType === "desktop",
+		    screenType,
+		  };
+		};
+		
+		export default useScreenDetector;
+		```
+3. Llamar el hook en el o los componentes donde necesitamos saber el tipo de pantalla del navegador para poder mostrar o esconder elementos. En el ejemplo, se llama el hook desde el componente `Layout.jsx` para esconder o mostrar las barras de navegación
+	```javascript
+	import { useDispatch, useSelector } from "react-redux";
+	import { Outlet, useNavigate } from "react-router-dom";
+	import { logoutThunk } from "../../redux/auth/authSlice";
+	import DestopNavbar from "../DesktopNavbar/DestopNavbar";
+	import MobileNavbar from "../MobileNavbar/MobileNavbar";
+	import useScreenDetector from "../../hooks/useScreenDetector";
+	
+	const Layout = () => {
+	  const navigate = useNavigate();
+	  const dispatch = useDispatch();
+	  const { isDesktop, isTablet, isMobile } = useScreenDetector();
+	  const { isAuthenticated } = useSelector((store) => store.auth);
+	
+	  const handleLogout = () => dispatch(logoutThunk());
+	  const handleBackNavigation = () => navigate(-1);
+	
+	  return (
+	    <div>
+	      <header>{(isDesktop || isTablet) && <DestopNavbar />}</header>
+	      <button onClick={handleBackNavigation}>Ir atrás</button>
+	      {isAuthenticated && <button onClick={handleLogout}>Cerrar sesión</button>}
+	      Layout
+	      <Outlet />
+	      <footer>{isMobile && <MobileNavbar />}</footer>
+	    </div>
+	  );
+	};
+	
+	export default Layout;
+	```
