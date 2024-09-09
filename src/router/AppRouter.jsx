@@ -11,27 +11,30 @@ import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../Firebase/firebaseConfig";
 import { useDispatch, useSelector } from "react-redux";
-import { restoreSession } from "../redux/auth/authSlice";
+import {
+  restoreActiveSessionThunk,
+  // restoreSession,
+} from "../redux/auth/authSlice";
 import PrivateRoutes from "./PrivateRoutes";
 import PublicRoutes from "./PublicRoutes";
 
 const AppRouter = () => {
   const dispatch = useDispatch();
-  const { loading, isAuthenticated } = useSelector((store) => store.auth);
+  const { loading, isAuthenticated, user } = useSelector((store) => store.auth);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     onAuthStateChanged(auth, (authUser) => {
       if (authUser) {
-        const loggedInUser = {
-          id: authUser.uid,
-          displayName: authUser.displayName,
-          email: authUser.email || null,
-          phoneNumber: authUser.phoneNumber || null,
-          accessToken: authUser.accessToken,
-          photoURL: authUser.photoURL,
-        };
-        dispatch(restoreSession(loggedInUser));
+        // const loggedInUser = {
+        //   id: authUser.uid,
+        //   displayName: authUser.displayName,
+        //   email: authUser.email || null,
+        //   phoneNumber: authUser.phoneNumber || null,
+        //   accessToken: authUser.accessToken,
+        //   photoURL: authUser.photoURL,
+        // };
+        dispatch(restoreActiveSessionThunk(authUser.uid));
       }
       setChecking(false);
     });
@@ -47,6 +50,7 @@ const AppRouter = () => {
             <Route index element={<Feed />} />
             <Route path="post/:postId" element={<PostDetails />} />
             <Route path="profile/:userId" element={<Profile />} />
+            {user.isAdmin ? <Route path="dasboard" element={<Feed />} /> : null}
           </Route>
           <Route element={<PublicRoutes isAuthenticated={isAuthenticated} />}>
             <Route path="register" element={<Register />} />

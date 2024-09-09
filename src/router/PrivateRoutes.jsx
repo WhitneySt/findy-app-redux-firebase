@@ -9,7 +9,7 @@ const PrivateRoutes = ({
   if (!isAuthenticated) {
     return <Navigate replace to={redirectPath} />;
   }
-  return children || <Outlet />
+  return children || <Outlet />;
 };
 
 PrivateRoutes.propTypes = {
