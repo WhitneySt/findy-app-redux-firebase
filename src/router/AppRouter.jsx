@@ -20,7 +20,7 @@ import PublicRoutes from "./PublicRoutes";
 
 const AppRouter = () => {
   const dispatch = useDispatch();
-  const { loading, isAuthenticated, user } = useSelector((store) => store.auth);
+  const { loading, isAuthenticated } = useSelector((store) => store.auth);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -43,7 +43,7 @@ const AppRouter = () => {
   if (loading || checking) return <div>...Cargando</div>;
 
   return (
-    <BrowserRouter basename="/findy-app-redux-firebase/">
+    <BrowserRouter basename="/findy-app-redux-firebase">
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route element={<PrivateRoutes isAuthenticated={isAuthenticated} />}>
