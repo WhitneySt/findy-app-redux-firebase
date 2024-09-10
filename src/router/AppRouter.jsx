@@ -43,7 +43,7 @@ const AppRouter = () => {
   if (loading || checking) return <div>...Cargando</div>;
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/findy-app-redux-firebase/">
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route element={<PrivateRoutes isAuthenticated={isAuthenticated} />}>
