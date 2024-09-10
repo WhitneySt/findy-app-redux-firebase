@@ -50,7 +50,7 @@ const AppRouter = () => {
             <Route index element={<Feed />} />
             <Route path="post/:postId" element={<PostDetails />} />
             <Route path="profile/:userId" element={<Profile />} />
-            {user.isAdmin ? <Route path="dasboard" element={<Feed />} /> : null}
+            {/* {user.isAdmin ? <Route path="dasboard" element={<Feed />} /> : null} */}
           </Route>
           <Route element={<PublicRoutes isAuthenticated={isAuthenticated} />}>
             <Route path="register" element={<Register />} />
