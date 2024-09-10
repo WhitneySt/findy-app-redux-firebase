@@ -3,6 +3,7 @@ import axios from "axios";
 
 const Feed = () => {
   const [accessToken, setAccessToken] = useState(null);
+  const [userInfo, setUserInfo] = useState(null);
   const [error, setError] = useState(null);
 
   const exchangeCodeForToken = async (code) => {
@@ -11,9 +12,24 @@ const Feed = () => {
         "http://localhost:3000/api/instagram/auth",
         { code }
       );
-      setAccessToken(response.data.access_token);
+      const token = response.data.access_token;
+      setAccessToken(token);
+      return token;
     } catch (err) {
       setError("Error al obtener el token de acceso");
+      console.error("Error:", err);
+    }
+  };
+
+  const getUserInfo = async (token) => {
+    try {
+      const response = await axios.post(
+        "http://localhost:3000/api/instagram/user-info",
+        { accessToken: token }
+      );
+      setUserInfo(response.data);
+    } catch (err) {
+      setError("Error al obtener la información del usuario");
       console.error("Error:", err);
     }
   };
@@ -30,7 +46,11 @@ const Feed = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get("code");
     if (code) {
-      exchangeCodeForToken(code);
+      exchangeCodeForToken(code).then((token) => {
+        if (token) {
+          getUserInfo(token);
+        }
+      });
     }
   }, []);
 
@@ -44,6 +64,13 @@ const Feed = () => {
       </button>
       {accessToken && (
         <p className="mt-4">Token de acceso obtenido: {accessToken}</p>
+      )}
+      {userInfo && (
+        <div className="mt-4">
+          <h2 className="text-xl font-bold">Información del usuario:</h2>
+          <p>ID: {userInfo.id}</p>
+          <p>Username: {userInfo.username}</p>
+        </div>
       )}
       {error && <p className="mt-4 text-red-500">{error}</p>}
     </div>
