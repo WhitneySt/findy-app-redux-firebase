@@ -3,6 +3,7 @@ import axios from "axios";
 
 const Feed = () => {
   const [accessToken, setAccessToken] = useState(null);
+  
   const [userInfo, setUserInfo] = useState(null);
   const [userMedia, setUserMedia] = useState(null);
   const [error, setError] = useState(null);
