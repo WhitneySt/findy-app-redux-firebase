@@ -20,7 +20,7 @@ import PublicRoutes from "./PublicRoutes";
 
 const AppRouter = () => {
   const dispatch = useDispatch();
-  const { loading, isAuthenticated } = useSelector((store) => store.auth);
+  const { loading, isAuthenticated, user } = useSelector((store) => store.auth);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -50,7 +50,9 @@ const AppRouter = () => {
             <Route index element={<Feed />} />
             <Route path="post/:postId" element={<PostDetails />} />
             <Route path="profile/:userId" element={<Profile />} />
-            {/* {user.isAdmin ? <Route path="dasboard" element={<Feed />} /> : null} */}
+            {user?.isAdmin ? (
+              <Route path="dasboard" element={<Feed />} />
+            ) : null}
           </Route>
           <Route element={<PublicRoutes isAuthenticated={isAuthenticated} />}>
             <Route path="register" element={<Register />} />
