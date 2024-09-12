@@ -1,9 +1,15 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import cors from "cors";
+import { nodePolyfills } from "vite-plugin-node-polyfills";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    nodePolyfills({
+      include: ["buffer", "process", "util"],
+    }),
+  ],
   base: "https://whitneyst.github.io/findy-app-redux-firebase/",
   define: {
     "process.env": {},

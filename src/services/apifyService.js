@@ -1,8 +1,10 @@
 import { ApifyClient } from "apify-client";
 
+console.log("ApifyClient:", ApifyClient);
 const client = new ApifyClient({
   token: import.meta.env.VITE_APIFY_API_TOKEN,
 });
+console.log("client:", client);
 
 export const scrapeInstagramProfile = async (username) => {
   try {
