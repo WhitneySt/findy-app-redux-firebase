@@ -2,8 +2,6 @@ import AddRestaurant from "../../components/AddRestaurant/AddRestaurant";
 import RestaurantList from "../../components/RestaurantList/RestaurantList";
 
 const Feed = () => {
-
-
  
   return (
     <div>
